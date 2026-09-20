@@ -32,6 +32,17 @@ type ParseResult struct {
 	Time  float64 `json:"time"`
 }
 
+// 移动端 UA（用于回退提取标题，部分站点 PC 端反爬严格）
+const mobileUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+
+// 常见平台移动端域名映射（标题提取回退用）
+var mobileDomainMap = map[string]string{
+	"www.iqiyi.com":    "m.iqiyi.com",
+	"v.qq.com":         "m.v.qq.com",
+	"www.youku.com":    "m.youku.com",
+	"www.bilibili.com": "m.bilibili.com",
+}
+
 // VideoParser 视频解析 API 核心类（与原 Python 版解析逻辑一致）
 type VideoParser struct {
 	client    *http.Client
@@ -68,9 +79,17 @@ func (p *VideoParser) newRequest(method, rawURL string) (*http.Request, error) {
 
 // get 发送 GET 请求并读取响应体（timeout 毫秒；0 表示使用默认 15s）
 func (p *VideoParser) get(rawURL string, timeout time.Duration) (string, error) {
+	return p.getWithUA(rawURL, timeout, "")
+}
+
+// getWithUA 发送 GET 请求，可指定 User-Agent（空则使用默认 PC UA）
+func (p *VideoParser) getWithUA(rawURL string, timeout time.Duration, ua string) (string, error) {
 	req, err := p.newRequest(http.MethodGet, rawURL)
 	if err != nil {
 		return "", err
+	}
+	if ua != "" {
+		req.Header.Set("User-Agent", ua)
 	}
 	ctx := context.Background()
 	if timeout > 0 {
@@ -133,17 +152,60 @@ func (p *VideoParser) ParseVideo(videoURL string, showURLOnError bool) *ParseRes
 	}
 }
 
-// GetVideoInfo 获取视频信息（标题等）
+// GetVideoInfo 获取视频信息（标题等）。
+// 优先从原始页面提取；若 PC 端页面因反爬无法提取标题，
+// 自动回退到移动端域名 + 移动端 UA 再次尝试。
 func (p *VideoParser) GetVideoInfo(videoURL string) (*VideoInfo, error) {
 	html, err := p.get(videoURL, 15*time.Second)
 	if err != nil {
 		return &VideoInfo{Title: "未知视频", URL: videoURL}, err
 	}
 
+	info := extractVideoInfo(html, videoURL)
+	if info.Title == "未知视频" {
+		if mobile := p.tryMobileInfo(videoURL); mobile != nil && mobile.Title != "未知视频" {
+			return mobile, nil
+		}
+	}
+	return info, nil
+}
+
+// tryMobileInfo 使用移动端域名 + 移动端 UA 重试提取视频信息
+func (p *VideoParser) tryMobileInfo(videoURL string) *VideoInfo {
+	mobileURL := toMobileURL(videoURL)
+	if mobileURL == "" || mobileURL == videoURL {
+		return nil
+	}
+	html, err := p.getWithUA(mobileURL, 15*time.Second, mobileUserAgent)
+	if err != nil {
+		return nil
+	}
+	info := extractVideoInfo(html, videoURL) // URL 保持原链接
+	if info.Title != "未知视频" {
+		return info
+	}
+	return nil
+}
+
+// toMobileURL 将 PC 端域名转换为移动端域名
+func toMobileURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	if m, ok := mobileDomainMap[u.Host]; ok {
+		u.Host = m
+		return u.String()
+	}
+	return ""
+}
+
+// extractVideoInfo 从 HTML 中提取视频信息
+func extractVideoInfo(html, videoURL string) *VideoInfo {
 	info := &VideoInfo{Title: "", Description: "", Duration: "", URL: videoURL}
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		return &VideoInfo{Title: "未知视频", URL: videoURL}, err
+		return &VideoInfo{Title: "未知视频", URL: videoURL}
 	}
 
 	// 标题 - 按优先级尝试（与原 Python 版一致）
@@ -207,7 +269,7 @@ func (p *VideoParser) GetVideoInfo(videoURL string) (*VideoInfo, error) {
 		}
 	}
 
-	return info, nil
+	return info
 }
 
 // cleanTitle 清理标题：去掉分隔符后缀与网站名称
