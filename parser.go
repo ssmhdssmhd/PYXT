@@ -61,7 +61,7 @@ func (p *VideoParser) newRequest(method, rawURL string) (*http.Request, error) {
 	req.Header.Set("Referer", "https://www.iqiyi.com/")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	// 注意: 不手动设置 Accept-Encoding, 由 Go 自动处理 gzip 解压
 	req.Header.Set("Connection", "keep-alive")
 	return req, nil
 }
