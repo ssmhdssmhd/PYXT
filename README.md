@@ -2,7 +2,7 @@
 
 > 由 Python 版 [视频解析 + API](视频解析工具) 项目移植重构的 Go 版本
 >
-> **版本:** v0.0.3 | **更新日期:** 2026-09-20 | **状态:** ✅ 可运行
+> **版本:** v0.0.4 | **更新日期:** 2026-09-20 | **状态:** ✅ 可运行
 
 一个高性能的视频解析 HTTP API 服务，使用 Go 编写。提供视频链接解析接口，支持爱奇艺、腾讯视频、优酷、芒果TV 等主流平台，返回可直接播放的 m3u8 / mp4 视频源地址。
 
@@ -142,6 +142,12 @@ fetch('http://localhost:5000/api/parse?url=https://www.iqiyi.com/v_xxx.html&show
 PYXT/
 ├── main.go              # HTTP 服务、路由、CORS、静态资源嵌入
 ├── parser.go            # 视频解析核心逻辑
+├── llqplayer/           # LLQPlayer 引擎资源目录（可直接替换更新）
+│   ├── engine.dat       #   引擎数据（核心，替换后无需改代码）
+│   ├── play.start.js    #   播放器启动脚本
+│   ├── code.min.js      #   CryptoJS 依赖库
+│   ├── run_llq.js       #   本地解析测试脚本
+│   └── README.md        #   更新说明
 ├── api_docs.html        # API 文档页面（内置在线测试）
 ├── player.html          # 通用播放器页面
 ├── video_player.html    # 视频播放页面
@@ -160,6 +166,12 @@ PYXT/
 - 支持 Windows / Linux / macOS 三平台交叉编译
 
 ## 📝 更新日志
+
+### v0.0.4 - 2026-09-20
+
+- 📂 新增 `llqplayer/` 引擎资源目录：集中存放 LLQPlayer 引擎数据与播放器脚本，后续更新只需直接替换 `engine.dat` / `play.start.js`，无需改动代码
+- 🔧 附带 `run_llq.js` 本地解析测试脚本（相对路径引用，可直接运行验证引擎是否生效）
+- ✅ 更新说明见 `llqplayer/README.md`
 
 ### v0.0.3 - 2026-09-20
 
