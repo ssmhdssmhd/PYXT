@@ -1,6 +1,8 @@
 # 构建产物
 pyxt
 pyxt.exe
+PYXT
+PYXT.exe
 dist/
 
 # 环境与编辑器
