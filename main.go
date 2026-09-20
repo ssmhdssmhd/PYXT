@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -14,7 +16,7 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.4"
+const version = "v0.0.5"
 
 // parseRequest 解析请求参数
 type parseRequest struct {
@@ -44,25 +46,46 @@ func main() {
 		port = "5000"
 	}
 
-	addr := "0.0.0.0:" + port
 	log.Println("============================================================")
 	log.Println("🎬 视频解析 API 服务 (Go 版) " + version + " 启动")
 	log.Println("============================================================")
-	log.Println("📡 API 地址: http://localhost:" + port + "/api/parse")
-	log.Println("📖 文档地址: http://localhost:" + port + "/")
-	log.Println("💚 健康检查: http://localhost:" + port + "/api/health")
-	log.Println("============================================================")
+	startServer(mux, port)
+}
 
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      corsMiddleware(mux),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
+// startServer 启动 HTTP 服务并阻塞运行；指定端口被占用时自动尝试下一个端口(最多 +10)
+func startServer(mux *http.ServeMux, basePort string) {
+	portNum, err := strconv.Atoi(basePort)
+	if err != nil {
+		log.Fatalf("无效的 PORT 环境变量: %s", basePort)
 	}
-
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
+	for i := 0; i < 10; i++ {
+		p := portNum + i
+		addr := "0.0.0.0:" + strconv.Itoa(p)
+		srv := &http.Server{
+			Addr:         addr,
+			Handler:      corsMiddleware(mux),
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 60 * time.Second,
+		}
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				log.Printf("⚠️  端口 %d 被占用，自动尝试端口 %d ...", p, p+1)
+				continue
+			}
+			log.Fatalf("服务启动失败: %v", err)
+		}
+		log.Println("============================================================")
+		log.Printf("📡 API 地址: http://localhost:%d/api/parse", p)
+		log.Printf("📖 文档地址: http://localhost:%d/", p)
+		log.Printf("💚 健康检查: http://localhost:%d/api/health", p)
+		log.Println("============================================================")
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("服务运行异常: %v", err)
+		}
+		return
 	}
+	log.Fatalf("端口 %d~%d 均被占用，请先停止旧进程后重试", portNum, portNum+9)
 }
 
 // corsMiddleware 允许跨域请求（与原 Flask CORS 一致）
