@@ -1,0 +1,97 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ''
+          - goos: linux
+            goarch: arm64
+            ext: ''
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: darwin
+            goarch: amd64
+            ext: ''
+          - goos: darwin
+            goarch: arm64
+            ext: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          VERSION=$(grep '^const version' main.go | sed 's/.*"\(.*\)"/\1/')
+          STAMP=$(date +%Y%m%d%H%M)
+          NAME="PYXT.${VERSION#v}.${GOOS}-${GOARCH}.${STAMP}"
+          go build -ldflags "-s -w" -o "dist/${NAME}${{ matrix.ext }}" .
+          cd dist
+          echo "ARTIFACT=${NAME}${{ matrix.ext }}" >> $GITHUB_ENV
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -j "${NAME}.zip" "${NAME}.exe"
+            echo "ZIPFILE=${NAME}.zip" >> $GITHUB_ENV
+          else
+            tar -czf "${NAME}.tar.gz" "${NAME}"
+            echo "ZIPFILE=${NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## PYXT ${{ github.ref_name }}
+
+            🎬 视频解析 API 服务 (Go 版)
+
+            - 由 GitHub Actions 云端自动构建
+            - 支持 Windows / Linux / macOS
+            - 单文件运行，无依赖

@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .video-info {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .video-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+        .player-section {
+            padding: 20px;
+        }
+        .player-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .player-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .url-list {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .url-list h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .url-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .url-item a {
+            color: #007bff;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .url-item a:hover {
+            text-decoration: underline;
+        }
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .copy-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 </h1>
+        </div>
+        
+        <div class="video-info">
+            <p><strong>视频链接:</strong> https://www.iqiyi.com/v_1mvx07qoap4.html?a=image&vfrmblk=pca_1_rank_list_1&r=5992680238744900&bstp=3&stype=0&block=pca_1_rank_list_1&rpage=pcw_dianying&rseat=image_6&position=3&ht=2&vfrm=pcw_dianying&vfrmrst=image_6</p>
+            <p><strong>描述:</strong> </p>
+            <p><strong>时长:</strong> </p>
+        </div>
+        
+        <div class="player-section">
+            <h3>🎥 视频播放器</h3>
+            <div class="player-container">
+                <iframe src="https://getdata.staticfile.link/player/0ae1f9336cd1034c9ffa238d74fff1a996302c8795c79efcc3e62f9b854b2a165e041384ab0be196150f308bb0c85ce65dd44d3cc420a99cc1a3b0e5c9cd2497" allowfullscreen></iframe>
+            </div>
+        </div>
+        
+        <div class="url-list">
+            <h3>🔗 可用播放源 (1 个)</h3>
+            
+            <div class="url-item">
+                <a href="https://getdata.staticfile.link/player/0ae1f9336cd1034c9ffa238d74fff1a996302c8795c79efcc3e62f9b854b2a165e041384ab0be196150f308bb0c85ce65dd44d3cc420a99cc1a3b0e5c9cd2497" target="_blank">https://getdata.staticfile.link/player/0ae1f9336cd1034c9ffa238d74fff1a996302c8795c79efcc3e62f9b854b2a165e041384ab0be196150f308bb0c85ce65dd44d3cc420a99cc1a3b0e5c9cd2497</a>
+                <button class="copy-btn" onclick="copyToClipboard('https://getdata.staticfile.link/player/0ae1f9336cd1034c9ffa238d74fff1a996302c8795c79efcc3e62f9b854b2a165e041384ab0be196150f308bb0c85ce65dd44d3cc420a99cc1a3b0e5c9cd2497')">复制</button>
+            </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('链接已复制到剪贴板！');
+            }).catch(function(err) {
+                console.error('复制失败:', err);
+                // 备用复制方法
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('链接已复制到剪贴板！');
+            });
+        }
+    </script>
+</body>
+</html>
+            
