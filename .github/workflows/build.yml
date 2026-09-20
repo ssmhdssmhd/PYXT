@@ -51,7 +51,7 @@ jobs:
         run: |
           VERSION=$(grep '^const version' main.go | sed 's/.*"\(.*\)"/\1/')
           STAMP=$(date +%Y%m%d%H%M)
-          NAME="PYXT.${VERSION#v}.${GOOS}-${GOARCH}.${STAMP}"
+          NAME="PYXT.${VERSION#v}.${GOOS}.${GOARCH}.${STAMP}"
           go build -ldflags "-s -w" -o "dist/${NAME}${{ matrix.ext }}" .
           cd dist
           echo "ARTIFACT=${NAME}${{ matrix.ext }}" >> $GITHUB_ENV
