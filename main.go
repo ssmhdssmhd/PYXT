@@ -3,10 +3,12 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -16,7 +18,7 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.8"
+const version = "v0.0.9"
 
 // parseRequest 解析请求参数
 type parseRequest struct {
@@ -33,6 +35,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/parse", handleParse)
+	mux.HandleFunc("/api/proxy", handleProxy)
 	mux.HandleFunc("/api/health", handleHealth)
 	mux.HandleFunc("/", handleIndex)
 
@@ -95,7 +98,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -168,6 +172,150 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"service": "视频解析 API",
 		"version": version,
 	})
+}
+
+// handleProxy 媒体代理接口：跨域转发 m3u8/mp4 等媒体流
+// 请求参数: url(必填, 目标媒体地址)
+// 作用:
+//  1. 为所有响应附加 CORS 头, 解决第三方 CDN 无跨域头导致的播放失败
+//  2. 支持 Range 请求(视频拖动进度条)
+//  3. m3u8 内容中的子流/分片地址重写为代理地址, 保证整条链路同源
+func handleProxy(w http.ResponseWriter, r *http.Request) {
+	target := strings.TrimSpace(r.URL.Query().Get("url"))
+	if target == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少必填参数: url"})
+		return
+	}
+	// 统一修正畸形地址(如上游输出的 https:///host/path 三斜杠), 后续校验与转发均基于修正后的地址
+	target = normalizeMediaURL(target)
+	u, err := url.Parse(target)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url 参数非法, 仅支持 http/https 地址"})
+		return
+	}
+
+	// 转发请求(透传 Range, 使用浏览器 UA)
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host+"/")
+	if rng := r.Header.Get("Range"); rng != "" {
+		req.Header.Set("Range", rng)
+	}
+	// 透传 cookie(部分 CDN 依赖 cookie 鉴权)
+	if ck := r.Header.Get("Cookie"); ck != "" {
+		req.Header.Set("Cookie", ck)
+	}
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "上游请求失败: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 统一附加 CORS 头
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Range")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type")
+
+	ct := resp.Header.Get("Content-Type")
+	isM3U8 := strings.Contains(strings.ToLower(ct), "mpegurl") || strings.HasSuffix(strings.ToLower(u.Path), ".m3u8")
+
+	if isM3U8 {
+		// m3u8 播放列表: 重写子流/分片地址为代理地址(避免浏览器跨域请求子流)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		if readErr != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "读取 m3u8 失败: " + readErr.Error()})
+			return
+		}
+		rewritten := rewriteM3U8(string(body), target)
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(rewritten))
+		return
+	}
+
+	// 普通媒体流: 透传状态与关键头, 流式转发(支持 Range 断点续传)
+	w.Header().Set("Content-Type", ct)
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		w.Header().Set("Content-Length", cl)
+	}
+	w.Header().Set("Accept-Ranges", "bytes")
+	if cr := resp.Header.Get("Content-Range"); cr != "" {
+		w.Header().Set("Content-Range", cr)
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// normalizeMediaURL 修正上游 CDN 的不规范地址: https:///host/path -> https://host/path
+func normalizeMediaURL(raw string) string {
+	if strings.Contains(raw, ":///") {
+		raw = strings.Replace(raw, ":///", "://", 1)
+	}
+	return raw
+}
+
+// proxyClient 媒体代理专用客户端(与解析器复用相同传输层配置)
+var proxyClient = &http.Client{
+	Timeout: 120 * time.Second,
+}
+
+// rewriteM3U8 将 m3u8 内容中的子流/分片地址全部重写为 /api/proxy 代理地址
+// baseURL 为 m3u8 自身地址, 用于解析相对路径
+func rewriteM3U8(content, baseURL string) string {
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return content
+	}
+	rewriteURI := func(raw string) string {
+		ref, refErr := url.Parse(strings.TrimSpace(raw))
+		if refErr != nil {
+			return raw
+		}
+		abs := base.ResolveReference(ref).String()
+		// 修正上游 CDN 的不规范输出: https:///host/path -> https://host/path
+		abs = normalizeMediaURL(abs)
+		return "/api/proxy?url=" + url.QueryEscape(abs)
+	}
+
+	var sb strings.Builder
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case trimmed == "" || strings.HasPrefix(trimmed, "#EXT-X-KEY") || strings.HasPrefix(trimmed, "#EXT-X-MAP"):
+			// 处理行内 URI="..." 属性(如 #EXT-X-KEY:METHOD=AES-128,URI="key.bin")
+			out := line
+			for {
+				idx := strings.Index(out, `URI="`)
+				if idx < 0 {
+					break
+				}
+				start := idx + len(`URI="`)
+				end := strings.Index(out[start:], `"`)
+				if end < 0 {
+					break
+				}
+				oldVal := out[start : start+end]
+				out = out[:start] + rewriteURI(oldVal) + out[start+end:]
+			}
+			sb.WriteString(out)
+		case strings.HasPrefix(trimmed, "#"):
+			// 其他标签行原样保留
+			sb.WriteString(line)
+		default:
+			// 非注释行即子流/分片地址, 全部转代理
+			sb.WriteString(rewriteURI(trimmed))
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // handleIndex API 文档页面

@@ -54,11 +54,11 @@ func NewVideoParser() *VideoParser {
 	return &VideoParser{
 		client: &http.Client{Timeout: 15 * time.Second},
 		parseAPIs: []string{
+			"https://jx.xmflv.cc/?url=",
 			"https://jx.playerjy.com/?url=",
 			"https://jx.aidouer.net/?url=",
 			"https://jx.jsonplayer.com/?url=",
 			"https://jx.bozrc.com:4433/player/?url=",
-			"https://jx.xmflv.cc/?url=",
 		},
 	}
 }
