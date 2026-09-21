@@ -123,13 +123,38 @@ func (p *VideoParser) ParseVideo(videoURL string, showURLOnError bool) *ParseRes
 	elapsed := time.Since(start).Seconds()
 
 	if len(playURLs) > 0 {
-		playURL := playURLs[0]
+		// 直链校验核心：对候选地址做真实可播校验，只返回 TVBox 能直接播放的 m3u8/mp4
+		if verified := p.verifyAndResolve(videoURL, playURLs, 8*time.Second); verified != "" {
+			return &ParseResult{
+				Code:  200,
+				Msg:   "获取成功",
+				Title: videoTitle,
+				Type:  p.DetectVideoType(verified),
+				URL:   verified,
+				From:  videoURL,
+				Time:  round(elapsed),
+			}
+		}
+		// 未找到可播直链：若首个候选是无扩展名的 HTML 播放页(如加密/JS 播放器)，
+		// 如实返回失败，避免把播不了的地址当做 m3u8 发给播放器
+		first := playURLs[0]
+		if !p.IsDirectMedia(first) {
+			return &ParseResult{
+				Code:  404,
+				Msg:   "未找到可直接播放的视频源（该链接可能为加密或 JS 播放器）",
+				Title: videoTitle,
+				Type:  "",
+				URL:   videoURL,
+				From:  videoURL,
+				Time:  round(elapsed),
+			}
+		}
 		return &ParseResult{
 			Code:  200,
 			Msg:   "获取成功",
 			Title: videoTitle,
-			Type:  p.DetectVideoType(playURL),
-			URL:   playURL,
+			Type:  p.DetectVideoType(first),
+			URL:   first,
 			From:  videoURL,
 			Time:  round(elapsed),
 		}
@@ -410,6 +435,20 @@ func (p *VideoParser) TryDirectParse(videoURL string) []string {
 		}
 	}
 	return playURLs
+}
+
+// IsDirectMedia 判断地址是否直接指向媒体资源(m3u8/mp4/flv 等)，而非 HTML 播放页
+func (p *VideoParser) IsDirectMedia(u string) bool {
+	if u == "" {
+		return false
+	}
+	lower := strings.ToLower(u)
+	for _, ext := range []string{".m3u8", ".mp4", ".flv", ".ts", ".m3u"} {
+		if strings.Contains(lower, ext) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsValidVideoURL 验证是否为有效视频 URL
