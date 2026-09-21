@@ -18,7 +18,7 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.9"
+const version = "v0.0.10"
 
 // parseRequest 解析请求参数
 type parseRequest struct {
@@ -53,6 +53,7 @@ func main() {
 
 	log.Println("============================================================")
 	log.Println("🎬 视频解析 API 服务 (Go 版) " + version + " 启动")
+	log.Printf("🔌 解析源 %d 个（来源: jiexiyuan.txt / PYXT_PARSE_APIS / 内置默认）", len(parser.parseAPIs))
 	log.Println("============================================================")
 	startServer(mux, port)
 }

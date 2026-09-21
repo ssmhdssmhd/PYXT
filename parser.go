@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -52,15 +53,53 @@ type VideoParser struct {
 // NewVideoParser 创建解析器实例
 func NewVideoParser() *VideoParser {
 	return &VideoParser{
-		client: &http.Client{Timeout: 15 * time.Second},
-		parseAPIs: []string{
-			"https://jx.xmflv.cc/?url=",
-			"https://jx.playerjy.com/?url=",
-			"https://jx.aidouer.net/?url=",
-			"https://jx.jsonplayer.com/?url=",
-			"https://jx.bozrc.com:4433/player/?url=",
-		},
+		client:    &http.Client{Timeout: 15 * time.Second},
+		parseAPIs: loadParseAPIs(),
 	}
+}
+
+// 内置默认解析源（当 jiexiyuan.txt 缺失或为空时回退使用；顺序即优先级）。
+var builtinParseAPIs = []string{
+	"https://jx.xmflv.cc/?url=",
+	"https://jx.playerjy.com/?url=",
+	"https://jx.aidouer.net/?url=",
+	"https://jx.jsonplayer.com/?url=",
+	"https://jx.bozrc.com:4433/player/?url=",
+}
+
+// loadParseAPIs 加载解析源列表，优先级从高到低：
+//  1. PYXT_PARSE_APIS 环境变量（逗号分隔，容器等不便改文件时快速覆盖）
+//  2. jiexiyuan.txt 配置文件（一行一个源，# / ; 开头为注释，空行忽略）
+//  3. 内置默认源（builtinParseAPIs）
+//
+// 换源只需编辑 jiexiyuan.txt 后重启程序，无需重新编译；多条源自动按顺序选择，失败自动换下一条。
+// 配置文件为纯本地读取，不依赖 GitHub 等外部网络。
+func loadParseAPIs() []string {
+	if env := strings.TrimSpace(os.Getenv("PYXT_PARSE_APIS")); env != "" {
+		var out []string
+		for _, s := range strings.Split(env, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if data, err := os.ReadFile("jiexiyuan.txt"); err == nil {
+		var out []string
+		for _, line := range strings.Split(string(data), "\n") {
+			s := strings.TrimSpace(line)
+			if s == "" || strings.HasPrefix(s, "#") || strings.HasPrefix(s, ";") || strings.HasPrefix(s, "//") {
+				continue
+			}
+			out = append(out, s)
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return builtinParseAPIs
 }
 
 // newRequest 构造带优化请求头的请求
