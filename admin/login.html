@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/ssmhdssmhd/MXLOGO@main/favicon/favicon.ico">
     <title>系统登录</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -53,17 +54,9 @@
             letter-spacing: 1px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
         }
-        .brand .logo .badge {
-            width: 46px; height: 46px;
-            border-radius: 12px;
-            background: linear-gradient(135deg,#40f0ff,#4096ff);
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 6px 20px rgba(64,150,255,.5);
-        }
-        .brand .logo .badge svg { width: 26px; height: 26px; }
+        .brand .brand-img { width: 260px; max-width: 70%; height: auto; }
         .brand h2 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
         .brand p { font-size: 14px; color: rgba(255,255,255,.75); line-height: 1.7; }
 
@@ -150,10 +143,7 @@
     <div class="login-wrap">
         <div class="brand">
             <div class="logo">
-                <span class="badge">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span>
-                管理后台
+                <img class="brand-img" src="https://cdn.jsdelivr.net/gh/ssmhdssmhd/MXLOGO@main/web/web-logo-dark.png" alt="射手沫蝴蝶">
             </div>
             <h2>欢迎回来 👋</h2>
             <p>登录管理系统，管理解析服务、接口代理与系统配置。</p>
