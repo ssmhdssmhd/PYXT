@@ -16,6 +16,8 @@ COPY --from=builder /app/api_docs.html .
 COPY --from=builder /app/player.html .
 COPY --from=builder /app/video_player.html .
 COPY --from=builder /app/jiexiyuan.txt .
+COPY --from=builder /app/admin/login.html /app/admin/login.html
+COPY --from=builder /app/admin/index.html /app/admin/index.html
 
 ENV PORT=5000
 EXPOSE 5000

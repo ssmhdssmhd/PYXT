@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #6c8cd5 100%);
+            overflow: hidden;
+        }
+        .bg-decor {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: .35;
+            z-index: 0;
+        }
+        .bg-decor.d1 { width: 420px; height: 420px; background: #4f8cff; top: -120px; left: -100px; }
+        .bg-decor.d2 { width: 360px; height: 360px; background: #7fd0ff; bottom: -100px; right: -80px; }
+
+        .login-wrap {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 960px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            backdrop-filter: blur(16px);
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+            margin: 20px;
+        }
+        .brand {
+            flex: 1.1;
+            padding: 56px 48px;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .brand .logo {
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .brand .logo .badge {
+            width: 46px; height: 46px;
+            border-radius: 12px;
+            background: linear-gradient(135deg,#40f0ff,#4096ff);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 6px 20px rgba(64,150,255,.5);
+        }
+        .brand .logo .badge svg { width: 26px; height: 26px; }
+        .brand h2 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+        .brand p { font-size: 14px; color: rgba(255,255,255,.75); line-height: 1.7; }
+
+        .form-side {
+            flex: 1;
+            background: #fff;
+            padding: 48px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .form-side h3 { font-size: 22px; color: #1f2d3d; margin-bottom: 6px; }
+        .form-side .sub { font-size: 13px; color: #8a94a6; margin-bottom: 28px; }
+
+        .field { margin-bottom: 20px; }
+        .field label { display: block; font-size: 13px; color: #5a6a7a; margin-bottom: 8px; }
+        .input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            border: 1px solid #dcdfe6;
+            border-radius: 8px;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .input-wrap:focus-within {
+            border-color: #4096ff;
+            box-shadow: 0 0 0 3px rgba(64,150,255,.15);
+        }
+        .input-wrap svg { width: 18px; height: 18px; margin: 0 12px; color: #a0a8b5; flex: none; }
+        .input-wrap input {
+            flex: 1;
+            border: none;
+            outline: none;
+            height: 46px;
+            font-size: 14px;
+            color: #1f2d3d;
+            background: transparent;
+        }
+        .input-wrap input::placeholder { color: #c0c6d1; }
+
+        .btn-login {
+            width: 100%;
+            height: 46px;
+            margin-top: 6px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg,#4096ff,#2a6be5);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: box-shadow .2s, transform .05s;
+        }
+        .btn-login:hover { box-shadow: 0 8px 20px rgba(64,150,255,.4); }
+        .btn-login:active { transform: scale(.98); }
+        .btn-login:disabled { opacity: .6; cursor: not-allowed; }
+
+        .tip {
+            margin-top: 14px;
+            font-size: 12px;
+            color: #b0b8c6;
+            text-align: center;
+        }
+        .err {
+            display: none;
+            background: #fde8e8;
+            color: #d03050;
+            font-size: 13px;
+            border: 1px solid #f8c4c4;
+            border-radius: 6px;
+            padding: 9px 12px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 720px) {
+            .brand { display: none; }
+            .login-wrap { max-width: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-decor d1"></div>
+    <div class="bg-decor d2"></div>
+
+    <div class="login-wrap">
+        <div class="brand">
+            <div class="logo">
+                <span class="badge">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                管理后台
+            </div>
+            <h2>欢迎回来 👋</h2>
+            <p>登录管理系统，管理解析服务、接口代理与系统配置。</p>
+        </div>
+
+        <div class="form-side">
+            <h3>账号登录</h3>
+            <div class="sub">请输入您的用户名与密码</div>
+            <div class="err" id="errBox"></div>
+            <div class="field">
+                <label>用户名</label>
+                <div class="input-wrap">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    <input id="username" type="text" placeholder="请输入用户名" autocomplete="username" autocapitalize="none">
+                </div>
+            </div>
+            <div class="field">
+                <label>密码</label>
+                <div class="input-wrap">
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6"/></svg>
+                    <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password">
+                </div>
+            </div>
+            <button class="btn-login" id="loginBtn">登 录</button>
+            <div class="tip">默认账号 admin / 123456（可通过环境变量修改）</div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var btn = document.getElementById('loginBtn');
+            var errBox = document.getElementById('errBox');
+
+            function showErr(msg) {
+                errBox.textContent = msg;
+                errBox.style.display = 'block';
+            }
+            function hideErr() {
+                errBox.style.display = 'none';
+            }
+            function doLogin() {
+                var username = document.getElementById('username').value.trim();
+                var password = document.getElementById('password').value;
+                if (!username || !password) { showErr('请输入用户名和密码'); return; }
+
+                btn.disabled = true;
+                btn.textContent = '登录中...';
+                hideErr();
+
+                fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.code === 200) {
+                        window.location.href = '/mx/';
+                    } else {
+                        showErr(res.msg || '登录失败');
+                        btn.disabled = false;
+                        btn.textContent = '登 录';
+                    }
+                })
+                .catch(function () {
+                    showErr('网络错误，请重试');
+                    btn.disabled = false;
+                    btn.textContent = '登 录';
+                });
+            }
+
+            btn.addEventListener('click', doLogin);
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') doLogin();
+            });
+            document.getElementById('username').focus();
+        })();
+    </script>
+</body>
+</html>

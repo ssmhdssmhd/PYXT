@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"embed"
 	"encoding/json"
 	"io"
@@ -18,7 +22,43 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.10"
+//go:embed admin/login.html admin/index.html
+var adminFiles embed.FS
+
+const version = "v0.0.11"
+
+// 后台管理：凭据与会话
+const (
+	adminCookieName = "pyxt_admin"
+	adminSessionKey = "PYXT_ADMIN_SESSION_KEY" // 未另设则使用随机密钥
+	adminTokenTTL   = 12 * time.Hour
+	adminSessionTTL = 12 * time.Hour
+)
+
+// adminCredentials 后台登录凭据（可环境变量覆盖，默认 admin/123456）
+func adminCredentials() (user, pass string) {
+	user = os.Getenv("ADMIN_USER")
+	if user == "" {
+		user = "admin"
+	}
+	pass = os.Getenv("ADMIN_PASS")
+	if pass == "" {
+		pass = "123456"
+	}
+	return user, pass
+}
+
+// adminSessionSecret 会话签名密钥（启动时生成一次并常驻内存）
+var adminSessionSecret = func() []byte {
+	if k := os.Getenv(adminSessionKey); k != "" {
+		return []byte(k)
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("生成会话密钥失败: %v", err)
+	}
+	return b
+}()
 
 // parseRequest 解析请求参数
 type parseRequest struct {
@@ -37,6 +77,10 @@ func main() {
 	mux.HandleFunc("/api/parse", handleParse)
 	mux.HandleFunc("/api/proxy", handleProxy)
 	mux.HandleFunc("/api/health", handleHealth)
+	mux.HandleFunc("/mx/", handleAdmin)
+	mux.HandleFunc("/mx", handleAdmin)
+	mux.HandleFunc("/api/admin/login", handleAdminLogin)
+	mux.HandleFunc("/api/admin/logout", handleAdminLogout)
 	mux.HandleFunc("/", handleIndex)
 
 	// 嵌入的静态文件（player 页面等）
@@ -332,6 +376,131 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
+}
+
+// ==================== 后台管理（/mx/） ====================
+
+// handleAdmin 后台路由：/mx/（主页）或 /mx/login（登录页）
+func handleAdmin(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	isLogin := path == "/mx/login" || path == "/mx/login/"
+	if isLogin {
+		// 登录页：已登录则直接进后台，否则显示登录页
+		if adminAuthed(r) {
+			http.Redirect(w, r, "/mx/", http.StatusFound)
+		} else {
+			serveAdminFile(w, "admin/login.html")
+		}
+		return
+	}
+	// 后台主页：未登录跳转登录页
+	if !adminAuthed(r) {
+		http.Redirect(w, r, "/mx/login", http.StatusFound)
+		return
+	}
+	serveAdminFile(w, "admin/index.html")
+}
+
+// serveAdminFile 输出后台静态页面（调用处已校验会话）
+func serveAdminFile(w http.ResponseWriter, file string) {
+	if file == "admin/index.html" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	data, err := adminFiles.ReadFile(file)
+	if err != nil {
+		http.Error(w, "页面缺失", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
+}
+
+// adminAuthed 校验后台 Cookie 令牌是否有效且未过期
+func adminAuthed(r *http.Request) bool {
+	tok, err := r.Cookie(adminCookieName)
+	if err != nil || tok.Value == "" {
+		return false
+	}
+	parts := strings.Split(tok.Value, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	// 校验签名
+	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || !hmac.Equal(sig, adminSign(parts[0])) {
+		return false
+	}
+	// 解析载荷并检查过期
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	var p struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil || p.Exp < time.Now().Unix() {
+		return false
+	}
+	return true
+}
+
+// handleAdminLogin 后台登录接口
+func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"code": "405", "msg": "仅支持 POST"})
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 400, "msg": "请求格式错误"})
+		return
+	}
+	user, pass := adminCredentials()
+	if req.Username != user || req.Password != pass {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 401, "msg": "用户名或密码错误"})
+		return
+	}
+
+	// 签发令牌: base64url(payload).base64url(signature)
+	exp := time.Now().Add(adminSessionTTL).Unix()
+	payloadJSON, _ := json.Marshal(map[string]interface{}{"u": user, "exp": exp})
+	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	token := payload + "." + base64.RawURLEncoding.EncodeToString(adminSign(payload))
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(adminSessionTTL.Seconds()),
+	})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "msg": "登录成功"})
+}
+
+// handleAdminLogout 退出登录
+func handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"code": "405", "msg": "仅支持 POST"})
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "msg": "已退出"})
+}
+
+// adminSign 计算载荷的 HMAC-SHA256 签名
+func adminSign(payload string) []byte {
+	mac := hmac.New(sha256.New, adminSessionSecret)
+	mac.Write([]byte(payload))
+	return mac.Sum(nil)
 }
 
 // writeJSON 输出 JSON 响应
