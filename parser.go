@@ -58,6 +58,7 @@ func NewVideoParser() *VideoParser {
 			"https://jx.aidouer.net/?url=",
 			"https://jx.jsonplayer.com/?url=",
 			"https://jx.bozrc.com:4433/player/?url=",
+			"https://jx.xmflv.cc/?url=",
 		},
 	}
 }
@@ -135,37 +136,52 @@ func (p *VideoParser) ParseVideo(videoURL string, showURLOnError bool) *ParseRes
 				Time:  round(elapsed),
 			}
 		}
-		// 未找到可播直链：若首个候选是无扩展名的 HTML 播放页(如加密/JS 播放器)，
-		// 则尝试用无头浏览器让页面 JS 真实执行并捕获 m3u8；仍失败才如实返回。
 		first := playURLs[0]
-		if !p.IsDirectMedia(first) {
-			if hl := p.resolveWithHeadless(videoURL, 18*time.Second); hl != "" {
-				return &ParseResult{
-					Code:  200,
-					Msg:   "获取成功（无头浏览器兜底）",
-					Title: videoTitle,
-					Type:  p.DetectVideoType(hl),
-					URL:   hl,
-					From:  videoURL,
-					Time:  round(elapsed),
-				}
-			}
+		// 首个候选是直链：即使校验未完全通过也如实返回，交由播放端自行处理
+		if p.IsDirectMedia(first) {
 			return &ParseResult{
-				Code:  404,
-				Msg:   "未找到可直接播放的视频源（该链接可能为加密或 JS 播放器）",
+				Code:  200,
+				Msg:   "获取成功",
 				Title: videoTitle,
-				Type:  "",
-				URL:   videoURL,
+				Type:  p.DetectVideoType(first),
+				URL:   first,
+				From:  videoURL,
+				Time:  round(elapsed),
+			}
+		}
+		// 未找到可播直链：候选为 HTML 播放页(如加密/JS 播放器)时，
+		// 用无头浏览器让页面 JS 真实执行并捕获 m3u8。
+		if hl := p.resolveWithHeadless(videoURL, 18*time.Second); hl != "" {
+			return &ParseResult{
+				Code:  200,
+				Msg:   "获取成功（无头浏览器兜底）",
+				Title: videoTitle,
+				Type:  p.DetectVideoType(hl),
+				URL:   hl,
 				From:  videoURL,
 				Time:  round(elapsed),
 			}
 		}
 		return &ParseResult{
-			Code:  200,
-			Msg:   "获取成功",
+			Code:  404,
+			Msg:   "未找到可直接播放的视频源（该链接可能为加密或 JS 播放器）",
 			Title: videoTitle,
-			Type:  p.DetectVideoType(first),
-			URL:   first,
+			Type:  "",
+			URL:   videoURL,
+			From:  videoURL,
+			Time:  round(elapsed),
+		}
+	}
+
+	// 各接口均未提取到候选地址（可能为纯 JS 加密播放页，普通抓取无结果）：
+	// 仍给无头浏览器兜底一次机会，让页面 JS 真实执行后再判断。
+	if hl := p.resolveWithHeadless(videoURL, 18*time.Second); hl != "" {
+		return &ParseResult{
+			Code:  200,
+			Msg:   "获取成功（无头浏览器兜底）",
+			Title: videoTitle,
+			Type:  p.DetectVideoType(hl),
+			URL:   hl,
 			From:  videoURL,
 			Time:  round(elapsed),
 		}

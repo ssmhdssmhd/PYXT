@@ -16,7 +16,7 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.7"
+const version = "v0.0.8"
 
 // parseRequest 解析请求参数
 type parseRequest struct {
@@ -28,6 +28,8 @@ type parseRequest struct {
 var parser = NewVideoParser()
 
 func main() {
+	defer closeHeadlessBrowser() // 程序退出时关闭常驻无头浏览器
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/parse", handleParse)
