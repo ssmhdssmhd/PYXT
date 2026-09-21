@@ -136,9 +136,20 @@ func (p *VideoParser) ParseVideo(videoURL string, showURLOnError bool) *ParseRes
 			}
 		}
 		// 未找到可播直链：若首个候选是无扩展名的 HTML 播放页(如加密/JS 播放器)，
-		// 如实返回失败，避免把播不了的地址当做 m3u8 发给播放器
+		// 则尝试用无头浏览器让页面 JS 真实执行并捕获 m3u8；仍失败才如实返回。
 		first := playURLs[0]
 		if !p.IsDirectMedia(first) {
+			if hl := p.resolveWithHeadless(videoURL, 18*time.Second); hl != "" {
+				return &ParseResult{
+					Code:  200,
+					Msg:   "获取成功（无头浏览器兜底）",
+					Title: videoTitle,
+					Type:  p.DetectVideoType(hl),
+					URL:   hl,
+					From:  videoURL,
+					Time:  round(elapsed),
+				}
+			}
 			return &ParseResult{
 				Code:  404,
 				Msg:   "未找到可直接播放的视频源（该链接可能为加密或 JS 播放器）",
