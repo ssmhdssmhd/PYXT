@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -52,14 +53,36 @@ type VideoParser struct {
 // NewVideoParser 创建解析器实例
 func NewVideoParser() *VideoParser {
 	return &VideoParser{
-		client: &http.Client{Timeout: 15 * time.Second},
-		parseAPIs: []string{
-			"https://jx.playerjy.com/?url=",
-			"https://jx.aidouer.net/?url=",
-			"https://jx.jsonplayer.com/?url=",
-			"https://jx.bozrc.com:4433/player/?url=",
-		},
+		client:    &http.Client{Timeout: 15 * time.Second},
+		parseAPIs: configuredParseAPIs(),
 	}
+}
+
+// configuredParseAPIs 返回解析接口列表。
+// 默认内置一组第三方接口；可通过环境变量 PYXT_PARSE_APIS 用逗号分隔覆盖，
+// 这样后续新增/调整解析源无需重新编译（方便扩展多个类似源）。
+// 列表顺序即优先级：越靠前越优先（HTTP 直链提取与无头浏览器兜底都按其顺序尝试）。
+func configuredParseAPIs() []string {
+	defaults := []string{
+		"https://jx.xmflv.cc/?url=",
+		"https://jx.playerjy.com/?url=",
+		"https://jx.aidouer.net/?url=",
+		"https://jx.jsonplayer.com/?url=",
+		"https://jx.bozrc.com:4433/player/?url=",
+	}
+	if env := strings.TrimSpace(os.Getenv("PYXT_PARSE_APIS")); env != "" {
+		var out []string
+		for _, s := range strings.Split(env, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return defaults
 }
 
 // newRequest 构造带优化请求头的请求

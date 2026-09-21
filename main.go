@@ -16,7 +16,7 @@ import (
 //go:embed api_docs.html player.html video_player.html
 var staticFiles embed.FS
 
-const version = "v0.0.7"
+const version = "v0.0.8"
 
 // parseRequest 解析请求参数
 type parseRequest struct {
